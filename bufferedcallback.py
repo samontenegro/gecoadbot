@@ -1,7 +1,7 @@
 import os
 from heartbeat import Heartbeat
 
-DEFAULT_TIMEOUT = 2
+DEFAULT_TIMEOUT = 3
 
 # Callback wrapper class for load-balancing fast data updates
 class BufferedCallback():
@@ -32,12 +32,7 @@ class BufferedCallback():
 			self.data = data
 			self.reset_counter()
 
-			print("BufferedCallback:set_data")
-
 	def trigger_callback(self):
-
-		print("BufferedCallback:trigger_callback")
-		
 		# Re-check callback reference is still callable-type
 		if callable(self.callback) and self.data is not None:
 
@@ -53,8 +48,6 @@ class BufferedCallback():
 
 			if self.timeout_counter == 0:
 				self.trigger_callback()
-
-				print("BufferedCallback:update_counter")
 
 	def reset_counter(self):
 		self.timeout_counter = self.timeout
