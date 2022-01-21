@@ -7,6 +7,10 @@ from enum import Enum
 import telegram
 from telegram.ext import Updater, Filters, InlineQueryHandler
 
+# Helper classes
+from heartbeat import Heartbeat
+from bufferedcallback import BufferedCallback
+
 # Instantiate and configure logger
 logging.basicConfig(
 	level = logging.INFO, format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s,"
@@ -32,6 +36,11 @@ class GecoAdBot():
 		self.updater 	= Updater(self.token, use_context=True, workers=8)
 		self.dispatcher = self.updater.dispatcher
 
+		# Initialize HeartBeat and BufferedCallback for inline query buffering
+		self.heartbeat = Heartbeat(1)
+		self.buffered_inline_query = BufferedCallback("process_inline_query", self.process_inline_query, self.heartbeat)
+		self.heartbeat.start_timer()
+
 	def add_handlers(self):
 
 		# Build inline query handlers
@@ -39,7 +48,6 @@ class GecoAdBot():
 
 		# Data and flow
 		self.dispatcher.add_handler(inline_query_handler)
-
 
 	def run(self):
 
@@ -60,13 +68,21 @@ class GecoAdBot():
 			self.updater.start_webhook(listen = "0.0.0.0", port = PORT, url_path = self.token, 
 										webhook_url = f"https://{T_APP_NAME}.herokuapp.com/{self.token}")
 
-		else:	
+		else:
 			self.updater.start_polling()
 			self.updater.idle()
 
 	# Handlers
 	def handle_inline_query(self, update, context):
-		print("SAM::INLIN QUERY")
+		print("SAM::INLINE QUERY")
+		print(update, context)
+
+		# Pass down query
+		query = (update, context)
+		self.buffered_inline_query.set_data(query)
+
+	def process_inline_query(self, update, context):
+		print("SAM::PROCESS QUERY")
 		print(update, context)
 
 if __name__ == "__main__":
