@@ -111,8 +111,7 @@ class GecoAdBot():
 						description = geco_ad.msg,
 						photo_url 	= geco_ad.media,
 						thumb_url 	= geco_ad.media,
-						caption 	= geco_ad.msg,
-						parse_mode 	= telegram.constants.PARSEMODE_MARKDOWN_V2
+						caption 	= geco_ad.msg
 				))
 			else:
 				response_list.append(
@@ -120,9 +119,8 @@ class GecoAdBot():
 						id 			= str(uuid4()),
 						title 		= geco_ad.msg[:20] + "...",
 						description = geco_ad.msg,
-						input_message_content 	= InputTextMessageContent(
-							message_text 	= geco_ad.msg,
-							parse_mode 		= telegram.constants.PARSEMODE_MARKDOWN_V2
+						input_message_content = InputTextMessageContent(
+							message_text = geco_ad.msg
 						)
 				))
 		
