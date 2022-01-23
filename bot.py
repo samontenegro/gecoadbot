@@ -21,82 +21,40 @@ logging.basicConfig(
 
 logger = logging.getLogger()
 
-class GecoAdBot():
+class GecoAdBotInstance():
+	def __init__(self, user_id, timer_ref, ad_sheet_manager_ref):
 
-	def __init__(self):
+		# Initialize internal vars
+		self.user_id 				= user_id
+		self.timer_ref 				= timer_ref
+		self.ad_sheet_manager_ref 	= ad_sheet_manager_ref
+		self.buffered_inline_query 	= BufferedCallback(self.process_inline_query)
 
-		# Fetch deploy mode
-		self.deploy_mode = os.getenv("T_DEPLOY_MODE")
+		# Register buffered callback to timer
+		self.timer_ref.register_listener(self.user_id, self.update)
 
-		# Fetch API token and hashed password from environment variables
-		self.token = os.getenv("T_API_TOKEN") if self.deploy_mode == "prod" else os.getenv("T_DEV_API_TOKEN")
+	def update(self):
+		# Update counters on buffered_inline_query and own timeout counter
+		self.buffered_inline_query.update_counter()
 
-		# Halt runtime if token isn't set
-		if not self.token:
-			raise RuntimeError
-
-		# Instantiate Updater and Dispatcher
-		self.updater 	= Updater(self.token, use_context=True, workers=8)
-		self.dispatcher = self.updater.dispatcher
-
-		# Initialize Sheet Manager
-		self.ad_sheet_manager = AdSheetManager()
-
-		# Initialize HeartBeat and BufferedCallback for inline query buffering
-		self.heartbeat = Heartbeat(1)
-		self.buffered_inline_query = BufferedCallback("process_inline_query", self.process_inline_query, self.heartbeat)
-		self.heartbeat.start_timer()
-
-	def add_handlers(self):
-
-		# Build inline query handlers
-		inline_query_handler = InlineQueryHandler(self.handle_inline_query)
-
-		# Data and flow
-		self.dispatcher.add_handler(inline_query_handler)
-
-	def run(self):
-
-		# Add handlers and start bot
-		self.add_handlers()
-
-		if self.deploy_mode == "prod":
-
-			# if deployed to production environment, set up webhook
-			PORT = int(os.environ.get('PORT', '8443'))
-
-			# Start and set webhook
-			T_APP_NAME = os.getenv("T_APP_NAME")
-
-			# Log init
-			logger.info("Initializing main bot at port {port}".format(port=PORT))
-
-			self.updater.start_webhook(listen = "0.0.0.0", port = PORT, url_path = self.token, 
-										webhook_url = f"https://{T_APP_NAME}.herokuapp.com/{self.token}")
-
-		else:
-			self.updater.start_polling()
-			self.updater.idle()
-
-	# Handlers
-	def handle_inline_query(self, update, context):
-		# Reject empty queries
-		if update.inline_query.query == '':
-			return
-
-		# Pass down query
-		query = (update, context)
+	def set_query(self, query):
+		# Pass query data to BufferedCallback instance
+		logger.info(f"User instance at {self.user_id} buffering \'{query[0].inline_query.query}\'")
 		self.buffered_inline_query.set_data(query)
 
 	def process_inline_query(self, update, context):
 		inline_query = update.inline_query
 		search_string = inline_query.query
-		ad_list = self.ad_sheet_manager.get_ads_from_string(search_string)
+
+		logger.info(f"User instance at {self.user_id} processing search string \'{search_string}\'")
+		ad_list = self.ad_sheet_manager_ref.get_ads_from_string(search_string)
 
 		# If ad_list is valid, respond with list
 		if ad_list is not None:
 			query_response = self.build_inline_query_response(ad_list)
-			inline_query.answer(query_response, cache_time = 20)
+
+			logger.info(f"User instance at {self.user_id} answering query for search string \'{search_string}\'")
+			inline_query.answer(query_response, cache_time = 30)
 
 	# Inline Response
 	def build_inline_query_response(self, ad_list):
@@ -125,6 +83,86 @@ class GecoAdBot():
 				))
 		
 		return response_list
+
+class GecoAdBot():
+
+	def __init__(self):
+
+		# Fetch deploy mode
+		self.deploy_mode = os.getenv("T_DEPLOY_MODE")
+
+		# Fetch API token and hashed password from environment variables
+		self.token = os.getenv("T_API_TOKEN") if self.deploy_mode == "prod" else os.getenv("T_DEV_API_TOKEN")
+
+		# Halt runtime if token isn't set
+		if not self.token:
+			raise RuntimeError
+
+		# Instantiate Updater and Dispatcher
+		self.updater 	= Updater(self.token, use_context=True, workers=8)
+		self.dispatcher = self.updater.dispatcher
+
+		# Init user->bot instance mapping
+		self.user_map = {}
+
+		# Initialize Sheet Manager
+		self.ad_sheet_manager = AdSheetManager()
+
+		# Initialize HeartBeat and BufferedCallback for inline query buffering
+		self.heartbeat = Heartbeat(1)
+		self.heartbeat.start_timer()
+
+	def add_handlers(self):
+
+		# Build inline query handlers
+		inline_query_handler = InlineQueryHandler(self.handle_inline_query)
+
+		# Data and flow
+		self.dispatcher.add_handler(inline_query_handler)
+
+	def run(self):
+
+		# Add handlers and start bot
+		self.add_handlers()
+
+		if self.deploy_mode == "prod":
+
+			# if deployed to production environment, set up webhook
+			PORT = int(os.environ.get('PORT', '8443'))
+
+			# Start and set webhook
+			T_APP_NAME = os.getenv("T_APP_NAME")
+
+			# Log init
+			logger.info(f"Initializing main bot at port {PORT}")
+
+			self.updater.start_webhook(listen = "0.0.0.0", port = PORT, url_path = self.token, 
+										webhook_url = f"https://{T_APP_NAME}.herokuapp.com/{self.token}")
+
+		else:
+
+			logger.info("Initializing main bot in dev deploy mode")
+			self.updater.start_polling()
+			self.updater.idle()
+
+	# Handlers
+	def handle_inline_query(self, update, context):
+		# Reject empty queries
+		if update.inline_query.query == '':
+			return
+
+		# Pass query to user instance bot
+		if update.inline_query.from_user.id is not None:
+			user_id = update.inline_query.from_user.id
+
+			logger.info(f"Received query \'{update.inline_query.query}\' from user_id {user_id}")
+
+			if user_id not in self.user_map:
+				self.user_map[user_id] = GecoAdBotInstance(user_id, self.heartbeat, self.ad_sheet_manager)
+				logger.info(f"User instance initialized for {user_id}")
+
+			query = (update, context)
+			self.user_map[user_id].set_query(query)
 
 if __name__ == "__main__":
 	bot = GecoAdBot()

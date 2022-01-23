@@ -1,11 +1,11 @@
 import os
 from heartbeat import Heartbeat
 
-DEFAULT_TIMEOUT = 3
+DEFAULT_TIMEOUT = 2
 
 # Callback wrapper class for load-balancing fast data updates
 class BufferedCallback():
-	def __init__(self, id, callback, timer = None, timeout = DEFAULT_TIMEOUT):
+	def __init__(self, callback, timeout = DEFAULT_TIMEOUT):
 
 		# Set timeout in seconds
 		self.timeout = int(timeout) if int(timeout) >= 1 else DEFAULT_TIMEOUT
@@ -17,13 +17,6 @@ class BufferedCallback():
 		# Set callback
 		if callable(callback):
 			self.callback = callback
-		else:
-			raise RuntimeError
-		
-		# Initialize HeartBeat
-		if timer is not None:
-			self.heartbeat = timer
-			self.heartbeat.register_listener(id, self.update_counter)
 		else:
 			raise RuntimeError
 
