@@ -5,6 +5,7 @@ from enum import Enum
 
 # Telegram bot API
 import telegram
+from telegram.error import TelegramError
 from telegram.ext import Updater, Filters, InlineQueryHandler
 from telegram import InlineQueryResultPhoto, InlineQueryResultArticle, InputTextMessageContent
 
@@ -53,8 +54,23 @@ class GecoAdBotInstance():
 		if ad_list is not None:
 			query_response = self.build_inline_query_response(ad_list)
 
-			logger.info(f"User instance at {self.user_id} answering query for search string \'{search_string}\'")
-			inline_query.answer(query_response, cache_time = 30)
+			try:
+				inline_query.answer(query_response, cache_time = 60)
+			except TelegramError as e:
+
+				# Hack - the following is a hack because the python-telegram-bot developers can't be bothered to add actual error classes for the different
+				# types of query response fails; every error is raised as a BadRequest and it's impossible to check what is a network error, a timeout, or
+				# some other kind of error. This snippet is verbatim from a Github discussion on why the developers don't want to add custom errors. This
+				# is coloquially considered best practice, despite being an abomination that should never be done anywhere in any piece of production code,
+				# ever.
+
+				logger.info(f"An error occurred attempting to answer query \'{search_string}\' from {self.user_id}")
+				if str(e) == 'Query is too old and response timeout expired or query id is invalid':
+					logger.info("Query is too old and response timeout expired or query id is invalid") # log to INFO and do nothing
+				else: 
+					logger.error(str(e)) # log to ERROR
+			else:
+				logger.info(f"User instance at {self.user_id} answered query for search string \'{search_string}\'")
 
 	# Inline Response
 	def build_inline_query_response(self, ad_list):

@@ -43,7 +43,7 @@ class Heartbeat:
 						listener = self.listeners[key]
 						listener()
 					except Exception as e:
-						print("heartbeat::dispatch_listeners error while executing listener " + key)
+						print("heartbeat::dispatch_listeners error while executing listener " + str(key))
 						raise e
 
 	def unregister_listener(self, listener_id):
